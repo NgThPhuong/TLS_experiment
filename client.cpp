@@ -10,7 +10,8 @@
 #include <openssl/err.h>
 #define FAIL -1
 
-struct TraceEnter{
+struct TraceEnter
+{
     TraceEnter(const char file[], long line, const char func_name[])
     {
         this->file = &file[0],
@@ -28,10 +29,11 @@ struct TraceEnter{
 };
 
 #define TRACE_ENTER TraceEnter \
-                    entry(__FILE__, __LINE__, __PRETTY_FUNCTION__)
+entry(__FILE__, __LINE__, __PRETTY_FUNCTION__)
 
 int OpenConnection(const char *hostname, int port)
-{    TRACE_ENTER;
+{
+    TRACE_ENTER;
     int sd;
     struct hostent *host;
     struct sockaddr_in addr;
@@ -58,7 +60,8 @@ int OpenConnection(const char *hostname, int port)
 }
 
 const char *tls_rt_type(int type)
-{    TRACE_ENTER;
+{
+    TRACE_ENTER;
     switch (type)
     {
 #ifdef SSL3_RT_HEADER
@@ -79,7 +82,8 @@ const char *tls_rt_type(int type)
 }
 
 const char *ssl_msg_type(int ssl_ver, int msg)
-{    TRACE_ENTER;
+{
+    TRACE_ENTER;
 #ifdef SSL2_VERSION_MAJOR
     if (ssl_ver == SSL2_VERSION_MAJOR)
     {
@@ -171,7 +175,8 @@ const char *ssl_msg_type(int ssl_ver, int msg)
 static void ossl_trace(int direction, int ssl_ver, int content_type,
                        const void *buf, size_t len, SSL *ssl,
                        void *userp)
-{    TRACE_ENTER;
+{
+    TRACE_ENTER;
     const char *verstr = "???";
     //   struct Curl_cfilter *cf = userp;
     //   struct Curl_easy *data = NULL;
@@ -294,7 +299,8 @@ typedef struct
 int mydata_index;
 
 int verify_callback(int isVerifyOk, X509_STORE_CTX *)
-{    TRACE_ENTER;
+{
+    TRACE_ENTER;
     if (isVerifyOk)
     {
         printf("====> verify_callback: status: OK\n");
@@ -308,7 +314,8 @@ int verify_callback(int isVerifyOk, X509_STORE_CTX *)
 }
 
 SSL_CTX *InitCTX(void)
-{    TRACE_ENTER;
+{
+    TRACE_ENTER;
     SSL_CTX *ctx;
     OpenSSL_add_all_algorithms();                       /* Load cryptos, et.al. */
     SSL_load_error_strings();                           /* Bring in and register error messages */
@@ -319,14 +326,18 @@ SSL_CTX *InitCTX(void)
         ERR_print_errors_fp(stderr);
         abort();
     }
-    SSL_CTX_set_verify_depth(ctx, 1);
-    SSL_CTX_set_default_verify_store(ctx);
+    // se
+    // SSL_CTX_set_options(ctx, SSL_OP_ALL);
+    SSL_CTX_load_verify_locations(ctx, "./mycert.pem", "./mycert.pem");
+    // SSL_CTX_set_post_handshake_auth(ctx, 1);
+    // SSL_CTX_set_verify_depth(ctx, 1);
     SSL_CTX_set_msg_callback(ctx, ossl_trace);
     SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, verify_callback);
     return ctx;
 }
 void ShowCerts(SSL *ssl)
-{    TRACE_ENTER;
+{
+    TRACE_ENTER;
     X509 *cert;
     char *line;
     cert = SSL_get_peer_certificate(ssl); /* get the server's certificate */
@@ -348,7 +359,8 @@ void ShowCerts(SSL *ssl)
         printf("Info: No client certificates configured.\n");
 }
 void printOpenSSLError()
-{    TRACE_ENTER;
+{
+    TRACE_ENTER;
     BIO *bio = BIO_new(BIO_s_mem());
     ERR_print_errors(bio);
     char *buf;
@@ -357,11 +369,60 @@ void printOpenSSLError()
     BIO_free(bio);
 }
 
+SSL *setupSSL(SSL_CTX *ctx, int fd)
+{
+    TRACE_ENTER;
+    SSL *ssl = SSL_new(ctx); /* create new SSL connection sta  te */
+    if (!ssl)
+    {
+        printf("Couldn't SSL_new\n");
+    }
+    SSL_set_connect_state(ssl);
+    (void)SSL_set_mode(ssl, SSL_MODE_AUTO_RETRY);
+    if (SSL_set_fd(ssl, fd)) /* attach the socket descriptor */
+    {
+        printf("Could not SSL_set_fd\n");
+    }
+    return ssl;
+}
+
+int initSSL()
+
+{
+    TRACE_ENTER;
+#if (OPENSSL_VERSION_NUMBER >= 0x10100000L) && \
+    !defined(LIBRESSL_VERSION_NUMBER)
+    const uint64_t flags =
+#ifdef OPENSSL_INIT_ENGINE_ALL_BUILTIN
+        /* not present in BoringSSL */
+        OPENSSL_INIT_ENGINE_ALL_BUILTIN |
+#endif
+    OPENSSL_INIT_LOAD_CONFIG;
+
+    OPENSSL_init_ssl(flags, NULL);
+    OPENSSL_load_builtin_modules();
+
+    /* Let's get nice error messages */
+    SSL_load_error_strings();
+
+    /* Init the global ciphers and digests */
+    if (!SSLeay_add_ssl_algorithms())
+    {
+        return 0;
+    }
+    OpenSSL_add_all_algorithms();
+    return 1;
+#endif
+}
 int main(int count, char *strings[])
-{    TRACE_ENTER;
+{
+    TRACE_ENTER;
+    if(!initSSL())
+    {
+        printf("Init openssl failed!!!!\n");
+    }
     SSL_CTX *ctx;
-    int server;
-    SSL *ssl;
+    int socketFd;
     char buf[1024];
     char acClientRequest[1024] = {0};
     int bytes;
@@ -377,9 +438,8 @@ int main(int count, char *strings[])
     portnum = strings[2];
     printf("Prepare InitCTX()\n");
     ctx = InitCTX();
-    server = OpenConnection(hostname, atoi(portnum));
-    ssl = SSL_new(ctx);           /* create new SSL connection state */
-    SSL_set_fd(ssl, server);      /* attach the socket descriptor */
+    socketFd = OpenConnection(hostname, atoi(portnum));
+    SSL *ssl = setupSSL(ctx, socketFd);
     if (SSL_connect(ssl) == FAIL) /* perform the connection */
     {
         // printOpenSSLError();
@@ -428,7 +488,8 @@ int main(int count, char *strings[])
         // printf("Received: \"%s\"\n", buf);
         SSL_free(ssl); /* release connection state */
     }
-    close(server);     /* close socket */
+    close(socketFd);   /* close socket */
     SSL_CTX_free(ctx); /* release context */
+    SSL_free(ssl);
     return 0;
 }
