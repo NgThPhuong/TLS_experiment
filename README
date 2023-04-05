@@ -1,0 +1,9 @@
+# Step to build with local openssl
+## At folder openssl:
+- export INSTALL_PATH=<absolute path>
+- /config  --prefix=${INSTALL_PATH}
+- make
+- make install
+- export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${INSTALL_PATH}
+- g++ -Og -Wall -o client client.cpp -I${INSTALL_PATH}/include -L${INSTALL_PATH}/lib -lssl -lcrypto
+

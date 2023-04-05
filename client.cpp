@@ -6,8 +6,8 @@
 #include <sys/socket.h>
 #include <resolv.h>
 #include <netdb.h>
-#include <openssl/ssl.h>
-#include <openssl/err.h>
+#include "openssl/ssl.h"
+#include "openssl/err.h"
 #define FAIL -1
 
 struct TraceEnter
@@ -290,14 +290,6 @@ static void ossl_trace(int direction, int ssl_ver, int content_type,
     (void)ssl;
 }
 
-typedef struct
-{
-    int verbose_mode;
-    int verify_depth;
-    int always_continue;
-} mydata_t;
-int mydata_index;
-
 int verify_callback(int isVerifyOk, X509_STORE_CTX *)
 {
     TRACE_ENTER;
@@ -319,7 +311,7 @@ SSL_CTX *InitCTX(void)
     SSL_CTX *ctx;
     OpenSSL_add_all_algorithms();                       /* Load cryptos, et.al. */
     SSL_load_error_strings();                           /* Bring in and register error messages */
-    const SSL_METHOD *method = TLSv1_2_client_method(); /* Create new client-method instance */
+    const SSL_METHOD *method = TLS_client_method(); /* Create new client-method instance */
     ctx = SSL_CTX_new(method);                          /* Create new context */
     if (ctx == NULL)
     {
@@ -331,8 +323,9 @@ SSL_CTX *InitCTX(void)
     SSL_CTX_load_verify_locations(ctx, "./mycert.pem", "./mycert.pem");
     // SSL_CTX_set_post_handshake_auth(ctx, 1);
     // SSL_CTX_set_verify_depth(ctx, 1);
-    SSL_CTX_set_msg_callback(ctx, ossl_trace);
+    // SSL_CTX_set_msg_callback(ctx, ossl_trace);
     SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, verify_callback);
+    // SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, verify_callback);
     return ctx;
 }
 void ShowCerts(SSL *ssl)
@@ -372,14 +365,15 @@ void printOpenSSLError()
 SSL *setupSSL(SSL_CTX *ctx, int fd)
 {
     TRACE_ENTER;
+    printf("Openssl version: %s\n", SSLeay_version(0));
     SSL *ssl = SSL_new(ctx); /* create new SSL connection sta  te */
     if (!ssl)
     {
         printf("Couldn't SSL_new\n");
     }
-    SSL_set_connect_state(ssl);
-    (void)SSL_set_mode(ssl, SSL_MODE_AUTO_RETRY);
-    if (SSL_set_fd(ssl, fd)) /* attach the socket descriptor */
+    // SSL_set_connect_state(ssl);
+    // (void)SSL_set_mode(ssl, SSL_MODE_AUTO_RETRY);
+    if (!SSL_set_fd(ssl, fd)) /* attach the socket descriptor */
     {
         printf("Could not SSL_set_fd\n");
     }
@@ -400,7 +394,7 @@ int initSSL()
     OPENSSL_INIT_LOAD_CONFIG;
 
     OPENSSL_init_ssl(flags, NULL);
-    OPENSSL_load_builtin_modules();
+    // OPENSSL_load_builtin_modules();
 
     /* Let's get nice error messages */
     SSL_load_error_strings();
@@ -417,10 +411,10 @@ int initSSL()
 int main(int count, char *strings[])
 {
     TRACE_ENTER;
-    if(!initSSL())
-    {
-        printf("Init openssl failed!!!!\n");
-    }
+    // if(!initSSL())
+    // {
+    //     printf("Init openssl failed!!!!\n");
+    // }
     SSL_CTX *ctx;
     int socketFd;
     char buf[1024];
