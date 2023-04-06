@@ -5,5 +5,12 @@
 - make
 - make install
 - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${INSTALL_PATH}
-- g++ -Og -Wall -o client client.cpp -I${INSTALL_PATH}/include -L${INSTALL_PATH}/lib -lssl -lcrypto
+- g++ -Og -Wall (-static) -o client client.cpp -I${INSTALL_PATH}/include -L${INSTALL_PATH}/lib (-Wl,-Bstatic -lssl -lcrypto -lm) -lssl -lcrypto
+
+# Tips to build statically
+
+* search and install libstdc++-static
+* search and install glibc-static
+
+
 
